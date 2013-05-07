@@ -1,0 +1,640 @@
+import pyodbc
+import datetime
+
+#DB Connection
+conn = pyodbc.connect('DRIVER={Teradata}; DBCNAME=TDPROD;UID=up_username;PWD=password;QUIETMODE=YES;')
+dbconnect = conn.cursor()
+
+#import file properties
+filepath = 'H:\Used_Car_Remediation\\'
+file_delimit = '\n'
+
+
+#CA cain file require YYYYMMDD in the file format, gets current day
+current_date = datetime.datetime.now()
+filedate = current_date.strftime("%Y%m%d")
+
+print('Start Stored Procedure')
+#Execute stored procedure for remediation logic
+dbconnect.execute("""call up_jshen.used_car_remediation ()""")
+dbconnect.execute("""end transaction""")
+
+print('Stored Procedure Done')
+
+# branding only (historical solds)
+
+dbconnect = conn.cursor()
+brand = dbconnect.execute("""select esn ||',,,'|| promo_code_one ||',,,,,,,,,,,,,,,'
+from dp_wedw_snd.used_car_deact_logic_results
+where action = 'BRAND-ONLY'""")
+
+
+file = open(filepath+ 'Branding.txt', 'w')
+for data in brand:
+    data_string = ""
+    for letter in data:
+        data_string += letter
+    file.write(data_string + file_delimit)
+file.close()
+
+print('Branding Done')
+
+#deactivate brand trigger
+
+dbt = dbconnect.execute("""  
+select esn || ','||
+--- 1st primary corpid
+','|| 
+---2nd secondary corpid
+',' || 
+case when promo_Code_one = 'NULL' or Promo_Code_one is null then '' else (TRIM(Promo_Code_one)) end ||','||
+---2nd primary corpid
+','||
+---2nd secondary corpid
+','||
+case when Promo_Code2 = 'NULL' or Promo_Code2 is null then '' else (TRIM(Promo_Code2)) end ||','||
+---- 2nd esn (binding)
+','||
+---- account id (binding)
+','||
+---- plan id (binding)
+','|| 
+CAST(CAST(CURRENT_DATE  AS FORMAT 'YYYY-MM-DD') AS CHAR(10)) || ','|| ---order date, formatted currently in current date for used cars
+case when firstname is null then '' 
+	 	 when firstname like ('%,%') then TRIM(substring(firstname ,1, position(',' in firstname) - 1)||''||substring(firstname, position(',' in firstname) + 1, length(firstname))) else TRIM(firstname) end ||','||
+case when lastname is null then '' 
+	 	 when lastname like ('%,%') then TRIM(substring(lastname ,1, position(',' in lastname) - 1)||''||substring(lastname, position(',' in lastname) + 1, length(lastname))) else TRIM(lastname) end ||','||
+case when (address is null or address = 'Used Car with No CNA') then '' 
+	 	 when address like ('%,%') then TRIM(substring(address ,1, position(',' in address) - 1)||''||substring(address, position(',' in address) + 1, length(address))) else TRIM(address) end ||','||
+case when (city is null or city = 'No CNA') then ''
+	 	 when city like ('%,%') then TRIM(substring(city ,1, position(',' in city) - 1)||''||substring(city, position(',' in city) + 1, length(city))) else TRIM(city) end ||','||
+case when (state is null or state = 'XX') then ''
+	 	 when state like ('%,%') then TRIM(substring(state ,1, position(',' in state) - 1)||''||substring(state, position(',' in state) + 1, length(state))) else TRIM(state) end ||','||
+case when (zip is null or zip = '99999') then '' 
+	 	 when zip like ('%,%') then TRIM(substring(zip ,1, position(',' in zip) - 1)||''||substring(zip, position(',' in zip) + 1, length(zip))) else TRIM(zip) end ||','||
+case when phonenumber is null then '' 
+		when length(phonenumber) <> 10 then ''
+	 	 when phonenumber like ('%,%') then TRIM(substring(phonenumber ,1, position(',' in phonenumber) - 1)||''||substring(phonenumber, position(',' in phonenumber) + 1, length(phonenumber))) else TRIM(phonenumber) end ||','||
+case when email is null then '' 
+		when email = 'NoCNA@NoCNA.usedcar' then ''
+	 	 when email like ('%,%') then TRIM(substring(email ,1, position(',' in email) - 1)||''||substring(email, position(',' in email) + 1, length(email))) else TRIM(email) end
+from dp_wedw_snd.used_car_deact_logic_results
+where action = 'DEACTIVATE-BRAND-TRIGGER'
+and (firstname is not null and lastname is not null and zip is not null)
+
+union
+
+select esn || ','||
+--- 1st primary corpid
+','|| 
+---2nd secondary corpid
+',' || 
+case when promo_Code_one = 'NULL' or Promo_Code_one is null then '' else (TRIM(Promo_Code_one)) end ||','||
+---2nd primary corpid
+','||
+---2nd secondary corpid
+','||
+case when Promo_Code2 = 'NULL' or Promo_Code2 is null then '' else (TRIM(Promo_Code2)) end ||','||
+---- 2nd esn (binding) ---audio esn
+','||
+---- account id (binding)
+','||
+---- plan id (binding)
+','|| 
+CAST(CAST(CURRENT_DATE  AS FORMAT 'YYYY-MM-DD') AS CHAR(10)) || ','|| ---order date, formatted currently in current date for used cars
+case when firstname is null then '' 
+	 	 when firstname like ('%,%') then TRIM(substring(firstname ,1, position(',' in firstname) - 1)||''||substring(firstname, position(',' in firstname) + 1, length(firstname))) else '' end ||','||
+case when lastname is null then '' 
+	 	 when lastname like ('%,%') then TRIM(substring(lastname ,1, position(',' in lastname) - 1)||''||substring(lastname, position(',' in lastname) + 1, length(lastname))) else '' end ||','||
+case when address is null then '' 
+	 	 when address like ('%,%') then TRIM(substring(address ,1, position(',' in address) - 1)||''||substring(address, position(',' in address) + 1, length(address))) else '' end ||','||
+case when city is null then '' 
+	 	 when city like ('%,%') then TRIM(substring(city ,1, position(',' in city) - 1)||''||substring(city, position(',' in city) + 1, length(city))) else '' end ||','||
+case when state is null then '' 
+	 	 when state like ('%,%') then TRIM(substring(state ,1, position(',' in state) - 1)||''||substring(state, position(',' in state) + 1, length(state))) else '' end ||','||
+case when zip is null then '' 
+	 	 when zip like ('%,%') then TRIM(substring(zip ,1, position(',' in zip) - 1)||''||substring(zip, position(',' in zip) + 1, length(zip))) else '' end ||','||
+case when phonenumber is null then '' 
+		when length(phonenumber) <> 10 then ''
+	 	 when phonenumber like ('%,%') then TRIM(substring(phonenumber ,1, position(',' in phonenumber) - 1)||''||substring(phonenumber, position(',' in phonenumber) + 1, length(phonenumber))) else '' end ||','||
+case when email is null then '' 
+		when email = 'NoCNA@NoCNA.usedcar' then ''
+	 	 when email like ('%,%') then TRIM(substring(email ,1, position(',' in email) - 1)||''||substring(email, position(',' in email) + 1, length(email))) else '' end
+from dp_wedw_snd.used_car_deact_logic_results
+where action = 'DEACTIVATE-BRAND-TRIGGER'
+and (firstname is null and lastname is null and zip is null)
+""")
+
+
+
+
+file = open(filepath+ 'Deactivate_Brand_Trigger.txt', 'w')
+for data in dbt:
+    data_string = ""
+    for letter in data:
+        data_string += letter
+    file.write(data_string + file_delimit)
+file.close()
+
+print ('Deactivate - Brand - Trigger Done')
+
+
+#brand trigger 
+bt = dbconnect.execute("""select esn || ','||
+--- 1st primary corpid
+','|| 
+---2nd secondary corpid
+',' || 
+case when promo_Code_one = 'NULL' or Promo_Code_one is null then '' else (TRIM(Promo_Code_one)) end ||','||
+---2nd primary corpid
+','||
+---2nd secondary corpid
+','||
+case when Promo_Code2 = 'NULL' or Promo_Code2 is null then '' else (TRIM(Promo_Code2)) end ||','||
+---- 2nd esn (binding)
+','||
+---- account id (binding)
+','||
+---- plan id (binding)
+','|| 
+CAST(CAST(CURRENT_DATE  AS FORMAT 'YYYY-MM-DD') AS CHAR(10)) || ','|| ---order date, formatted currently in current date for used cars
+case when firstname is null then '' 
+	 	 when firstname like ('%,%') then TRIM(substring(firstname ,1, position(',' in firstname) - 1)||''||substring(firstname, position(',' in firstname) + 1, length(firstname))) else TRIM(firstname) end ||','||
+case when lastname is null then '' 
+	 	 when lastname like ('%,%') then TRIM(substring(lastname ,1, position(',' in lastname) - 1)||''||substring(lastname, position(',' in lastname) + 1, length(lastname))) else TRIM(lastname) end ||','||
+case when (address is null or address = 'Used Car with No CNA') then '' 
+	 	 when address like ('%,%') then TRIM(substring(address ,1, position(',' in address) - 1)||''||substring(address, position(',' in address) + 1, length(address))) else TRIM(address) end ||','||
+case when (city is null or city = 'No CNA') then ''
+	 	 when city like ('%,%') then TRIM(substring(city ,1, position(',' in city) - 1)||''||substring(city, position(',' in city) + 1, length(city))) else TRIM(city) end ||','||
+case when (state is null or state = 'XX') then ''
+	 	 when state like ('%,%') then TRIM(substring(state ,1, position(',' in state) - 1)||''||substring(state, position(',' in state) + 1, length(state))) else TRIM(state) end ||','||
+case when (zip is null or zip = '99999') then '' 
+	 	 when zip like ('%,%') then TRIM(substring(zip ,1, position(',' in zip) - 1)||''||substring(zip, position(',' in zip) + 1, length(zip))) else TRIM(zip) end ||','||
+case when phonenumber is null then '' 
+		when length(phonenumber) <> 10 then ''
+	 	 when phonenumber like ('%,%') then TRIM(substring(phonenumber ,1, position(',' in phonenumber) - 1)||''||substring(phonenumber, position(',' in phonenumber) + 1, length(phonenumber))) else TRIM(phonenumber) end ||','||
+case when email is null then '' 
+		when email = 'NoCNA@NoCNA.usedcar' then ''
+	 	 when email like ('%,%') then TRIM(substring(email ,1, position(',' in email) - 1)||''||substring(email, position(',' in email) + 1, length(email))) else TRIM(email) end
+from dp_wedw_snd.used_car_deact_logic_results
+where action = 'BRAND-TRIGGER'
+and (firstname is not null and lastname is not null and zip is not null)
+
+union
+
+select esn || ','||
+--- 1st primary corpid
+','|| 
+---2nd secondary corpid
+',' || 
+case when promo_Code_one = 'NULL' or Promo_Code_one is null then '' else (TRIM(Promo_Code_one)) end ||','||
+---2nd primary corpid
+','||
+---2nd secondary corpid
+','||
+case when Promo_Code2 = 'NULL' or Promo_Code2 is null then '' else (TRIM(Promo_Code2)) end ||','||
+---- 2nd esn (binding) ---audio esn
+','||
+---- account id (binding)
+','||
+---- plan id (binding)
+','|| 
+CAST(CAST(CURRENT_DATE  AS FORMAT 'YYYY-MM-DD') AS CHAR(10)) || ','|| ---order date, formatted currently in current date for used cars
+case when firstname is null then '' 
+	 	 when firstname like ('%,%') then TRIM(substring(firstname ,1, position(',' in firstname) - 1)||''||substring(firstname, position(',' in firstname) + 1, length(firstname))) else '' end ||','||
+case when lastname is null then '' 
+	 	 when lastname like ('%,%') then TRIM(substring(lastname ,1, position(',' in lastname) - 1)||''||substring(lastname, position(',' in lastname) + 1, length(lastname))) else '' end ||','||
+case when address is null then '' 
+	 	 when address like ('%,%') then TRIM(substring(address ,1, position(',' in address) - 1)||''||substring(address, position(',' in address) + 1, length(address))) else '' end ||','||
+case when city is null then '' 
+	 	 when city like ('%,%') then TRIM(substring(city ,1, position(',' in city) - 1)||''||substring(city, position(',' in city) + 1, length(city))) else '' end ||','||
+case when state is null then '' 
+	 	 when state like ('%,%') then TRIM(substring(state ,1, position(',' in state) - 1)||''||substring(state, position(',' in state) + 1, length(state))) else '' end ||','||
+case when zip is null then '' 
+	 	 when zip like ('%,%') then TRIM(substring(zip ,1, position(',' in zip) - 1)||''||substring(zip, position(',' in zip) + 1, length(zip))) else '' end ||','||
+case when phonenumber is null then '' 
+		when length(phonenumber) <> 10 then ''
+	 	 when phonenumber like ('%,%') then TRIM(substring(phonenumber ,1, position(',' in phonenumber) - 1)||''||substring(phonenumber, position(',' in phonenumber) + 1, length(phonenumber))) else '' end ||','||
+case when email is null then '' 
+		when email = 'NoCNA@NoCNA.usedcar' then ''
+	 	 when email like ('%,%') then TRIM(substring(email ,1, position(',' in email) - 1)||''||substring(email, position(',' in email) + 1, length(email))) else '' end
+from dp_wedw_snd.used_car_deact_logic_results
+where action = 'BRAND-TRIGGER'
+and (firstname is null and lastname is null and zip is null)
+""")
+
+
+file = open(filepath+ 'Brand_Trigger.txt', 'w')
+for data in bt:
+    data_string = ""
+    for letter in data:
+        data_string += letter
+    file.write(data_string + file_delimit)
+file.close()
+
+print ('Brand - Trigger Done')
+
+#brand trigger rebrand
+btrb = dbconnect.execute("""select esn || ','||
+--- 1st primary corpid
+','|| 
+---2nd secondary corpid
+',' || 
+case when promo_Code_one = 'NULL' or Promo_Code_one is null then '' else (TRIM(Promo_Code_one)) end ||','||
+---2nd primary corpid
+','||
+---2nd secondary corpid
+','||
+case when Promo_Code2 = 'NULL' or Promo_Code2 is null then '' else (TRIM(Promo_Code2)) end ||','||
+---- 2nd esn (binding)
+','||
+---- account id (binding)
+','||
+---- plan id (binding)
+','|| 
+CAST(CAST(CURRENT_DATE  AS FORMAT 'YYYY-MM-DD') AS CHAR(10)) || ','|| ---order date, formatted currently in current date for used cars
+case when firstname is null then '-'
+	 	 when firstname like ('%,%') then TRIM(substring(firstname ,1, position(',' in firstname) - 1)||''||substring(firstname, position(',' in firstname) + 1, length(firstname))) else TRIM(firstname) end ||','||
+case when lastname is null then '-' 
+	 	 when lastname like ('%,%') then TRIM(substring(lastname ,1, position(',' in lastname) - 1)||''||substring(lastname, position(',' in lastname) + 1, length(lastname))) else TRIM(lastname) end ||','||
+case when (address is null or address = 'Used Car with No CNA') then '-' 
+	 	 when address like ('%,%') then TRIM(substring(address ,1, position(',' in address) - 1)||''||substring(address, position(',' in address) + 1, length(address))) else TRIM(address) end ||','||
+case when (city is null or city = 'No CNA') then '-' 
+	 	 when city like ('%,%') then TRIM(substring(city ,1, position(',' in city) - 1)||''||substring(city, position(',' in city) + 1, length(city))) else TRIM(city) end ||','||
+case when (state is null or state = 'XX') then '-' 
+	 	 when state like ('%,%') then TRIM(substring(state ,1, position(',' in state) - 1)||''||substring(state, position(',' in state) + 1, length(state))) else TRIM(state) end ||','||
+case when (zip is null or zip = '99999') then '' 
+	 	 when zip like ('%,%') then TRIM(substring(zip ,1, position(',' in zip) - 1)||''||substring(zip, position(',' in zip) + 1, length(zip))) else TRIM(zip) end ||','||
+case when phonenumber is null then '' 
+		when length(phonenumber) <> 10 then ''
+	 	 when phonenumber like ('%,%') then TRIM(substring(phonenumber ,1, position(',' in phonenumber) - 1)||''||substring(phonenumber, position(',' in phonenumber) + 1, length(phonenumber))) else TRIM(phonenumber) end ||','||
+case when email is null then '' 
+		when email = 'NoCNA@NoCNA.usedcar' then ''
+	 	 when email like ('%,%') then TRIM(substring(email ,1, position(',' in email) - 1)||''||substring(email, position(',' in email) + 1, length(email))) else TRIM(email) end
+from dp_wedw_snd.used_car_deact_logic_results
+where action = 'BRAND-TRIGGER-REBRAND'
+and (firstname is not null and lastname is not null and zip is not null)
+
+union
+
+select esn || ','||
+--- 1st primary corpid
+','|| 
+---2nd secondary corpid
+',' || 
+case when promo_Code_one = 'NULL' or Promo_Code_one is null then '' else (TRIM(Promo_Code_one)) end ||','||
+---2nd primary corpid
+','||
+---2nd secondary corpid
+','||
+case when Promo_Code2 = 'NULL' or Promo_Code2 is null then '' else (TRIM(Promo_Code2)) end ||','||
+---- 2nd esn (binding) ---audio esn
+','||
+---- account id (binding)
+','||
+---- plan id (binding)
+','|| 
+CAST(CAST(CURRENT_DATE  AS FORMAT 'YYYY-MM-DD') AS CHAR(10)) || ','|| ---order date, formatted currently in current date for used cars
+case when firstname is null then '' 
+	 	 when firstname like ('%,%') then TRIM(substring(firstname ,1, position(',' in firstname) - 1)||''||substring(firstname, position(',' in firstname) + 1, length(firstname))) else '' end ||','||
+case when lastname is null then '' 
+	 	 when lastname like ('%,%') then TRIM(substring(lastname ,1, position(',' in lastname) - 1)||''||substring(lastname, position(',' in lastname) + 1, length(lastname))) else '' end ||','||
+case when address is null then '' 
+	 	 when address like ('%,%') then TRIM(substring(address ,1, position(',' in address) - 1)||''||substring(address, position(',' in address) + 1, length(address))) else '' end ||','||
+case when city is null then '' 
+	 	 when city like ('%,%') then TRIM(substring(city ,1, position(',' in city) - 1)||''||substring(city, position(',' in city) + 1, length(city))) else '' end ||','||
+case when state is null then '' 
+	 	 when state like ('%,%') then TRIM(substring(state ,1, position(',' in state) - 1)||''||substring(state, position(',' in state) + 1, length(state))) else '' end ||','||
+case when zip is null then '' 
+	 	 when zip like ('%,%') then TRIM(substring(zip ,1, position(',' in zip) - 1)||''||substring(zip, position(',' in zip) + 1, length(zip))) else '' end ||','||
+case when phonenumber is null then '' 
+		when length(phonenumber) <> 10 then ''
+	 	 when phonenumber like ('%,%') then TRIM(substring(phonenumber ,1, position(',' in phonenumber) - 1)||''||substring(phonenumber, position(',' in phonenumber) + 1, length(phonenumber))) else '' end ||','||
+case when email is null then '' 
+		when email = 'NoCNA@NoCNA.usedcar' then ''
+	 	 when email like ('%,%') then TRIM(substring(email ,1, position(',' in email) - 1)||''||substring(email, position(',' in email) + 1, length(email))) else '' end
+from dp_wedw_snd.used_car_deact_logic_results
+where action = 'BRAND-TRIGGER-REBRAND'
+and (firstname is null and lastname is null and zip is null)
+""")
+
+
+file = open(filepath+ 'Brand_Trigger_Rebrand.txt', 'w')
+for data in btrb:
+    data_string = ""
+    for letter in data:
+        data_string += letter
+    file.write(data_string + file_delimit)
+file.close()
+
+print ('Brand - Trigger - Rebrand Done')
+
+# deactivate brand trigger rebrand
+dbtrb = dbconnect.execute("""select esn || ','||
+--- 1st primary corpid
+','|| 
+---2nd secondary corpid
+',' || 
+case when promo_Code_one = 'NULL' or Promo_Code_one is null then '' else (TRIM(Promo_Code_one)) end ||','||
+---2nd primary corpid
+','||
+---2nd secondary corpid
+','||
+case when Promo_Code2 = 'NULL' or Promo_Code2 is null then '' else (TRIM(Promo_Code2)) end ||','||
+---- 2nd esn (binding)
+','||
+---- account id (binding)
+','||
+---- plan id (binding)
+','|| 
+CAST(CAST(CURRENT_DATE  AS FORMAT 'YYYY-MM-DD') AS CHAR(10)) || ','|| ---order date, formatted currently in current date for used cars
+case when firstname is null then '-' 
+	 	 when firstname like ('%,%') then TRIM(substring(firstname ,1, position(',' in firstname) - 1)||''||substring(firstname, position(',' in firstname) + 1, length(firstname))) else TRIM(firstname) end ||','||
+case when lastname is null then '-' 
+	 	 when lastname like ('%,%') then TRIM(substring(lastname ,1, position(',' in lastname) - 1)||''||substring(lastname, position(',' in lastname) + 1, length(lastname))) else TRIM(lastname) end ||','||
+case when (address is null or address = 'Used Car with No CNA') then '-' 
+	 	 when address like ('%,%') then TRIM(substring(address ,1, position(',' in address) - 1)||''||substring(address, position(',' in address) + 1, length(address))) else TRIM(address) end ||','||
+case when (city is null or city = 'No CNA') then '-' 
+	 	 when city like ('%,%') then TRIM(substring(city ,1, position(',' in city) - 1)||''||substring(city, position(',' in city) + 1, length(city))) else TRIM(city) end ||','||
+case when (state is null or state = 'XX') then '-' 
+	 	 when state like ('%,%') then TRIM(substring(state ,1, position(',' in state) - 1)||''||substring(state, position(',' in state) + 1, length(state))) else TRIM(state) end ||','||
+case when (zip is null or zip = '99999') then '' 
+	 	 when zip like ('%,%') then TRIM(substring(zip ,1, position(',' in zip) - 1)||''||substring(zip, position(',' in zip) + 1, length(zip))) else TRIM(zip) end ||','||
+case when phonenumber is null then '' 
+		when length(phonenumber) <> 10 then ''
+	 	 when phonenumber like ('%,%') then TRIM(substring(phonenumber ,1, position(',' in phonenumber) - 1)||''||substring(phonenumber, position(',' in phonenumber) + 1, length(phonenumber))) else TRIM(phonenumber) end ||','||
+case when email is null then '' 
+		when email = 'NoCNA@NoCNA.usedcar' then ''
+	 	 when email like ('%,%') then TRIM(substring(email ,1, position(',' in email) - 1)||''||substring(email, position(',' in email) + 1, length(email))) else TRIM(email) end
+from dp_wedw_snd.used_car_deact_logic_results
+where action = 'DEACTIVATE-BRAND-TRIGGER-REBRAND'
+and (firstname is not null and lastname is not null and zip is not null)
+
+union
+
+select esn || ','||
+--- 1st primary corpid
+','|| 
+---2nd secondary corpid
+',' || 
+case when promo_Code_one = 'NULL' or Promo_Code_one is null then '' else (TRIM(Promo_Code_one)) end ||','||
+---2nd primary corpid
+','||
+---2nd secondary corpid
+','||
+case when Promo_Code2 = 'NULL' or Promo_Code2 is null then '' else (TRIM(Promo_Code2)) end ||','||
+---- 2nd esn (binding) ---audio esn
+','||
+---- account id (binding)
+','||
+---- plan id (binding)
+','|| 
+CAST(CAST(CURRENT_DATE  AS FORMAT 'YYYY-MM-DD') AS CHAR(10)) || ','|| ---order date, formatted currently in current date for used cars
+case when firstname is null then '' 
+	 	 when firstname like ('%,%') then TRIM(substring(firstname ,1, position(',' in firstname) - 1)||''||substring(firstname, position(',' in firstname) + 1, length(firstname))) else '' end ||','||
+case when lastname is null then '' 
+	 	 when lastname like ('%,%') then TRIM(substring(lastname ,1, position(',' in lastname) - 1)||''||substring(lastname, position(',' in lastname) + 1, length(lastname))) else '' end ||','||
+case when address is null then '' 
+	 	 when address like ('%,%') then TRIM(substring(address ,1, position(',' in address) - 1)||''||substring(address, position(',' in address) + 1, length(address))) else '' end ||','||
+case when city is null then '' 
+	 	 when city like ('%,%') then TRIM(substring(city ,1, position(',' in city) - 1)||''||substring(city, position(',' in city) + 1, length(city))) else '' end ||','||
+case when state is null then '' 
+	 	 when state like ('%,%') then TRIM(substring(state ,1, position(',' in state) - 1)||''||substring(state, position(',' in state) + 1, length(state))) else '' end ||','||
+case when zip is null then '' 
+	 	 when zip like ('%,%') then TRIM(substring(zip ,1, position(',' in zip) - 1)||''||substring(zip, position(',' in zip) + 1, length(zip))) else '' end ||','||
+case when phonenumber is null then '' 
+		when length(phonenumber) <> 10 then ''
+	 	 when phonenumber like ('%,%') then TRIM(substring(phonenumber ,1, position(',' in phonenumber) - 1)||''||substring(phonenumber, position(',' in phonenumber) + 1, length(phonenumber))) else '' end ||','||
+case when email is null then '' 
+		when email = 'NoCNA@NoCNA.usedcar' then ''
+	 	 when email like ('%,%') then TRIM(substring(email ,1, position(',' in email) - 1)||''||substring(email, position(',' in email) + 1, length(email))) else '' end
+from dp_wedw_snd.used_car_deact_logic_results
+where action = 'DEACTIVATE-BRAND-TRIGGER-REBRAND'
+and (firstname is null and lastname is null and zip is null)""")
+
+
+file = open(filepath+ 'Deactivate_Brand_Trigger_Rebrand.txt', 'w')
+for data in dbtrb:
+    data_string = ""
+    for letter in data:
+        data_string += letter
+    file.write(data_string + file_delimit)
+file.close()
+
+print ('Deactivate - Brand - Trigger - Rebrand Done')
+
+#Deactivate Brand Bind
+
+dbrbind = dbconnect.execute("""
+select non_audio_esn || ','||
+trim(trailing '.' from (trim( cast(primary_corpid as varchar(16)))))||','||
+trim(trailing '.' from (trim( cast(secondary_corpid as varchar(16)))))||','||
+case when promo_Code = 'NULL' or Promo_Code is null then '' else (TRIM(Promo_Code)) end ||','||
+---2nd primary corpid
+','||
+---2nd secondary corpid
+','||
+case when Promo_Code_2 = 'NULL' or Promo_Code_2 is null then '' else (TRIM(Promo_Code_2)) end ||','||
+audio_esn||','||
+accountnumber_audio||','||
+---- plan id (binding)
+','|| 
+CAST(CAST(CURRENT_DATE  AS FORMAT 'YYYY-MM-DD') AS CHAR(10)) || ',,,,,,,,'
+from dp_wedw_snd.used_car_binding
+where statuscode = 'A'
+and eventname in ('Used Car Sold','CPO Sold Cert')
+and accountnumber_audio <> accountnumber_non_audio""")
+
+file = open(filepath+ 'Deactivate_Brand_Bind.txt', 'w')
+for data in dbrbind:
+    data_string = ""
+    for letter in data:
+        data_string += letter
+    file.write(data_string + file_delimit)
+file.close()
+
+print ('Deactivate - Brand - Bind Done')
+
+
+#Brand Bind
+
+brbind = dbconnect.execute("""
+select non_audio_esn || ','||
+trim(trailing '.' from (trim( cast(primary_corpid as varchar(16)))))||','||
+trim(trailing '.' from (trim( cast(secondary_corpid as varchar(16)))))||','||
+case when promo_Code = 'NULL' or Promo_Code is null then '' else (TRIM(Promo_Code)) end ||','||
+---2nd primary corpid
+','||
+---2nd secondary corpid
+','||
+case when Promo_Code_2 = 'NULL' or Promo_Code_2 is null then '' else (TRIM(Promo_Code_2)) end ||','||
+audio_esn||','||
+accountnumber_audio||','||
+---- plan id (binding)
+','|| 
+CAST(CAST(CURRENT_DATE  AS FORMAT 'YYYY-MM-DD') AS CHAR(10)) || ',,,,,,,,'
+from dp_wedw_snd.used_car_binding
+where statuscode <> 'A'
+and eventname in ('Used Car Sold', 'CPO Sold Cert')
+and accountnumber_audio <> accountnumber_non_audio""")
+
+file = open(filepath+ 'Brand_Bind.txt', 'w')
+for data in brbind:
+    data_string = ""
+    for letter in data:
+        data_string += letter
+    file.write(data_string + file_delimit)
+file.close()
+
+print ('Brand - Bind Done')
+
+#Brand Bind
+
+brbind = dbconnect.execute("""
+select non_audio_esn || ','||
+trim(trailing '.' from (trim( cast(primary_corpid as varchar(16)))))||','||
+trim(trailing '.' from (trim( cast(secondary_corpid as varchar(16)))))||','||
+case when promo_Code = 'NULL' or Promo_Code is null then '' else (TRIM(Promo_Code)) end ||','||
+---2nd primary corpid
+','||
+---2nd secondary corpid
+','||
+case when Promo_Code_2 = 'NULL' or Promo_Code_2 is null then '' else (TRIM(Promo_Code_2)) end ||','||
+audio_esn||','||
+accountnumber_audio||','||
+---- plan id (binding)
+','|| 
+CAST(CAST(CURRENT_DATE  AS FORMAT 'YYYY-MM-DD') AS CHAR(10)) || ',,,,,,,,'
+from dp_wedw_snd.used_car_binding
+where statuscode = 'A'
+and eventname in ('Used Car Received', 'CPO Received Cert', 'Used Car Received')
+and accountnumber_audio <> accountnumber_non_audio
+""")
+
+file = open(filepath+ 'Brand_Bind.txt', 'w')
+for data in brbind:
+    data_string = ""
+    for letter in data:
+        data_string += letter
+    file.write(data_string + file_delimit)
+file.close()
+
+print ('Brand - Bind Done')
+
+# Deactivate Brand Bind Rebrand
+
+dbrbindrb = dbconnect.execute("""
+select non_audio_esn || ','||
+trim(trailing '.' from (trim( cast(primary_corpid as varchar(16)))))||','||
+trim(trailing '.' from (trim( cast(secondary_corpid as varchar(16)))))||','||
+case when promo_Code = 'NULL' or Promo_Code is null then '' else (TRIM(Promo_Code)) end ||','||
+---2nd primary corpid
+','||
+---2nd secondary corpid
+','||
+case when Promo_Code_2 = 'NULL' or Promo_Code_2 is null then '' else (TRIM(Promo_Code_2)) end ||','||
+audio_esn||','||
+accountnumber_audio||','||
+---- plan id (binding)
+','|| 
+CAST(CAST(CURRENT_DATE  AS FORMAT 'YYYY-MM-DD') AS CHAR(10)) || ',,,,,,,,'
+from dp_wedw_snd.used_car_binding
+where statuscode = 'A'
+and eventname in ('Used Car Received', 'CPO Received Cert', 'Used Car Received')
+and accountnumber_audio <> accountnumber_non_audio""")
+
+
+file = open(filepath+ 'Deactivate_Brand_Bind_Rebrand.txt', 'w')
+for data in dbrbindrb:
+    data_string = ""
+    for letter in data:
+        data_string += letter
+    file.write(data_string + file_delimit)
+file.close()
+
+print ('Deactivate - Brand - Bind - Rebrand Done')
+
+# Brand Bind Rebrand
+
+brbindrb = dbconnect.execute("""
+select non_audio_esn || ','||
+trim(trailing '.' from (trim( cast(primary_corpid as varchar(16)))))||','||
+trim(trailing '.' from (trim( cast(secondary_corpid as varchar(16)))))||','||
+case when promo_Code = 'NULL' or Promo_Code is null then '' else (TRIM(Promo_Code)) end ||','||
+---2nd primary corpid
+','||
+---2nd secondary corpid
+','||
+case when Promo_Code_2 = 'NULL' or Promo_Code_2 is null then '' else (TRIM(Promo_Code_2)) end ||','||
+audio_esn||','||
+accountnumber_audio||','||
+---- plan id (binding)
+','|| 
+CAST(CAST(CURRENT_DATE  AS FORMAT 'YYYY-MM-DD') AS CHAR(10)) || ',,,,,,,,'
+from dp_wedw_snd.used_car_binding
+where statuscode <> 'A'
+and eventname in ('Used Car Received', 'CPO Received Cert', 'Used Car Received')
+and accountnumber_audio <> accountnumber_non_audio""")
+
+
+file = open(filepath+ 'Brand_Bind_Rebrand.txt', 'w')
+for data in brbindrb:
+    data_string = ""
+    for letter in data:
+        data_string += letter
+    file.write(data_string + file_delimit)
+file.close()
+
+print ('Brand - Bind - Rebrand Done')
+
+
+# CA Cain
+
+ca_cain_cpo = dbconnect.execute("""select distinct esn
+from dp_wedw_snd.used_car_deact_logic_results
+where  action not in ('No action - Clear from fallout','Brand-Only')---clear brand-only because there is no validation for promocodes in logic
+and eventname = 'CPO Sold Cert'""")
+
+file = open(filepath+'cpo_activation_'+filedate+'.txt', 'w')
+for data in ca_cain_cpo:
+    data_string = ""
+    for letter in data:
+        data_string += letter
+    file.write(data_string + file_delimit)
+file.close()
+
+print ('CA Cain CPO Done')
+
+ca_cain_non_cpo = dbconnect.execute("""select distinct esn
+from dp_wedw_snd.used_car_deact_logic_results
+where  action not in ('No action - Clear from fallout','Brand-Only')---clear brand-only because there is no validation for promocodes in logic
+and eventname = 'Used Car Sold'""")
+
+file = open(filepath+'noncpo_activation_'+filedate+'.txt', 'w')
+for data in ca_cain_non_cpo:
+    data_string = ""
+    for letter in data:
+        data_string += str(letter)
+    file.write(data_string + file_delimit)
+file.close()
+
+print ('CA Cain NON CPO Done')
+
+
+conn.close()
+
+
+
+'''
+
+filename = raw_input('What would you like to name the file? ')
+filepath = os.path.join("C:\Program Files\Vixen\Vixen 2.1.1.0\Routines",filename)
+with open(filename, 'wb') as out:
+    for frame in frames:
+        out.write(' '.join(str(num) for num in frame))
+        out.write(' ')
+        out.write('\n')
+
+ \\ny01fs01\Users\jshen\used_car_remediation
+
+'''
