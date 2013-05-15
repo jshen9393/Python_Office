@@ -1,0 +1,26 @@
+import pyodbc
+import xml.etree.ElementTree as ET
+import glob
+
+file_names = glob.glob("H:\\unzip\\xml_files\\*NonFLTX*.ERR*") 
+conn = pyodbc.connect('DRIVER={Teradata}; DBCNAME=TDPROD;UID=up_jshen;PWD=apple25;', autocommit=True)
+dbconnect = conn.cursor()
+
+acct_list =[]
+
+for file in file_names: # loop to unzip file to destination one zip file at a time.
+  tree = ET.parse(file)
+	root = tree.getroot()
+	for account in root.findall('Account'):
+		acct_no = account.get('AccountNo')
+		error = account.find('ErrorDesc').text
+		row = []
+		row.append(acct_no)
+		row.append(error)
+		acct_list.append(row)
+		print file + 'done'
+dbconnect.executemany('Insert into dp_wedw_snd.asish_xml_test (acct_no, error_msg) values (?,?)', acct_list)
+
+conn.close()
+
+print "done"
